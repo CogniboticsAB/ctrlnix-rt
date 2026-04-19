@@ -2,7 +2,7 @@ name: Build RT Kernel and EtherCAT for RPi4
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   schedule:
     # Rebuild weekly to pick up nixpkgs security updates
     - cron: '0 3 * * 0'
