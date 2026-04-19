@@ -1,4 +1,4 @@
-# nixos-rpi4-rt
+# ctrlnix-rpi4-rt
 
 PREEMPT_RT kernel and EtherCAT IGH master for Raspberry Pi 4 on NixOS.
 
