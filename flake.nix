@@ -7,22 +7,19 @@
     lib = nixpkgs.lib;
 
     # ─── Shared RT kernel config ──────────────────────────────────────
-    # Applied to all three kernels. PREEMPT_VOLUNTARY is intentionally
-    # absent: it is a valid option in 6.12 but was removed in 6.18, so
-    # leaving it out keeps the config compatible with both versions.
+    # Applied to all three kernels. Notes:
+    # - PREEMPT_VOLUNTARY is intentionally absent: valid in 6.12 but
+    #   removed in 6.18, so omitting it keeps the config compatible.
+    # - DRM_I915_GVT / DRM_I915_GVT_KVMGT are absent from both 6.12
+    #   and 6.18 kernels but present in the nixpkgs base config; mark
+    #   them as unset to suppress build errors on both versions.
     rtKernelConfig = with lib.kernel; {
-      PREEMPT_RT = yes;
-      PREEMPT    = lib.mkForce no;
-      RCU_BOOST  = yes;
-    };
-
-    # ─── x86 6.18 extra overrides ─────────────────────────────────────
-    # DRM_I915_GVT and DRM_I915_GVT_KVMGT were removed in 6.18 but are
-    # still present in the nixpkgs base config, causing build errors.
-    rtKernelConfigX86_618 = rtKernelConfig // (with lib.kernel; {
+      PREEMPT_RT         = yes;
+      PREEMPT            = lib.mkForce no;
+      RCU_BOOST          = yes;
       DRM_I915_GVT       = lib.mkForce (option no);
       DRM_I915_GVT_KVMGT = lib.mkForce (option no);
-    });
+    };
 
     # ─── EtherCAT IGH 1.6.9 source (shared by all builds) ────────────
     ethercatSrc = {
@@ -103,7 +100,7 @@
     # ─── x86_64: vanilla kernel 6.18 ──────────────────────────────────
     linuxPackages-rt-x86-618 = pkgs-x86.linuxPackages_6_18.extend (_: super: {
       kernel = super.kernel.override {
-        structuredExtraConfig = rtKernelConfigX86_618;
+        structuredExtraConfig = rtKernelConfig;
       };
     });
 
