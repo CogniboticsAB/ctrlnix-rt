@@ -1,20 +1,30 @@
 {
-  description = "PREEMPT_RT kernel 6.18 and EtherCAT IGH master for NixOS (aarch64 + x86_64)";
+  description = "PREEMPT_RT kernels and EtherCAT IGH master for NixOS (aarch64 + x86_64)";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
 
   outputs = { self, nixpkgs }: let
     lib = nixpkgs.lib;
 
-    # ─── Kernel config (shared between architectures) ─────────────────
+    # ─── Shared RT kernel config ──────────────────────────────────────
+    # Applied to all three kernels. PREEMPT_VOLUNTARY is intentionally
+    # absent: it is a valid option in 6.12 but was removed in 6.18, so
+    # leaving it out keeps the config compatible with both versions.
     rtKernelConfig = with lib.kernel; {
-      PREEMPT_RT        = yes;
-      PREEMPT           = lib.mkForce no;
-      PREEMPT_VOLUNTARY = lib.mkForce no;
-      RCU_BOOST         = yes;
+      PREEMPT_RT = yes;
+      PREEMPT    = lib.mkForce no;
+      RCU_BOOST  = yes;
     };
 
-    # ─── EtherCAT source (shared) ─────────────────────────────────────
+    # ─── x86 6.18 extra overrides ─────────────────────────────────────
+    # DRM_I915_GVT and DRM_I915_GVT_KVMGT were removed in 6.18 but are
+    # still present in the nixpkgs base config, causing build errors.
+    rtKernelConfigX86_618 = rtKernelConfig // (with lib.kernel; {
+      DRM_I915_GVT       = lib.mkForce (option no);
+      DRM_I915_GVT_KVMGT = lib.mkForce (option no);
+    });
+
+    # ─── EtherCAT IGH 1.6.9 source (shared by all builds) ────────────
     ethercatSrc = {
       owner = "etherlab.org";
       repo  = "ethercat";
@@ -22,7 +32,7 @@
       hash  = "sha256-Msx0i1SAwlSMD3+vjGRNe36Yx9qdUYokVekGytZptqk=";
     };
 
-    # ─── Build EtherCAT kmod against a given kernel package set ───────
+    # ─── Helper: build EtherCAT kmod against a kernel package set ─────
     mkEthercatKmod = linuxPackages: pkgs:
       linuxPackages.callPackage
         ({ stdenv, fetchFromGitLab, kernel, automake, autoconf, libtool, pkgconf }:
@@ -49,7 +59,7 @@
           '';
         }) { fetchFromGitLab = pkgs.fetchFromGitLab; };
 
-    # ─── Build EtherCAT userspace tools against a given kernel ────────
+    # ─── Helper: build EtherCAT userspace tools ───────────────────────
     mkEthercatUserspace = linuxPackages: pkgs:
       pkgs.stdenv.mkDerivation {
         pname   = "ethercat-userspace";
@@ -64,63 +74,93 @@
         installPhase = "make install prefix=$out";
       };
 
-    # ─── aarch64 packages ─────────────────────────────────────────────
+    # ─── Helper: build a complete set of three packages for one kernel ─
+    mkKernelPackages = linuxPackages: pkgs: rec {
+      kernel             = linuxPackages.kernel;
+      ethercat-kmod      = mkEthercatKmod linuxPackages pkgs;
+      ethercat-userspace = mkEthercatUserspace linuxPackages pkgs;
+      default            = kernel;
+    };
+
+    # ─── aarch64: RPi4 kernel 6.12 ────────────────────────────────────
     pkgs-aarch64 = nixpkgs.legacyPackages."aarch64-linux";
 
-    linuxPackages-rt-rpi4 = pkgs-aarch64.linuxPackages_rpi4.extend (self: super: {
+    linuxPackages-rt-rpi4-612 = pkgs-aarch64.linuxPackages_rpi4.extend (_: super: {
       kernel = super.kernel.override {
         structuredExtraConfig = rtKernelConfig;
       };
     });
 
-    # ─── x86_64 packages ──────────────────────────────────────────────
+    # ─── x86_64: vanilla kernel 6.12 ──────────────────────────────────
     pkgs-x86 = nixpkgs.legacyPackages."x86_64-linux";
 
-    linuxPackages-rt-x86 = pkgs-x86.linuxPackages_6_18.extend (self: super: {
+    linuxPackages-rt-x86-612 = pkgs-x86.linuxPackages_6_12.extend (_: super: {
       kernel = super.kernel.override {
         structuredExtraConfig = rtKernelConfig;
+      };
+    });
+
+    # ─── x86_64: vanilla kernel 6.18 ──────────────────────────────────
+    linuxPackages-rt-x86-618 = pkgs-x86.linuxPackages_6_18.extend (_: super: {
+      kernel = super.kernel.override {
+        structuredExtraConfig = rtKernelConfigX86_618;
       };
     });
 
   in {
     # ─── Packages ─────────────────────────────────────────────────────
-    packages."aarch64-linux" = rec {
-      kernel             = linuxPackages-rt-rpi4.kernel;
-      ethercat-kmod      = mkEthercatKmod linuxPackages-rt-rpi4 pkgs-aarch64;
-      ethercat-userspace = mkEthercatUserspace linuxPackages-rt-rpi4 pkgs-aarch64;
-      default            = kernel;
+    packages."aarch64-linux" = {
+      # RPi4 kernel 6.12 with PREEMPT_RT
+      kernel-rpi4-612             = linuxPackages-rt-rpi4-612.kernel;
+      ethercat-kmod-rpi4-612      = mkEthercatKmod linuxPackages-rt-rpi4-612 pkgs-aarch64;
+      ethercat-userspace-rpi4-612 = mkEthercatUserspace linuxPackages-rt-rpi4-612 pkgs-aarch64;
+      default                     = linuxPackages-rt-rpi4-612.kernel;
     };
 
-    packages."x86_64-linux" = rec {
-      kernel             = linuxPackages-rt-x86.kernel;
-      ethercat-kmod      = mkEthercatKmod linuxPackages-rt-x86 pkgs-x86;
-      ethercat-userspace = mkEthercatUserspace linuxPackages-rt-x86 pkgs-x86;
-      default            = kernel;
+    packages."x86_64-linux" = {
+      # x86 kernel 6.12 with PREEMPT_RT
+      kernel-x86-612             = linuxPackages-rt-x86-612.kernel;
+      ethercat-kmod-x86-612      = mkEthercatKmod linuxPackages-rt-x86-612 pkgs-x86;
+      ethercat-userspace-x86-612 = mkEthercatUserspace linuxPackages-rt-x86-612 pkgs-x86;
+
+      # x86 kernel 6.18 with PREEMPT_RT
+      kernel-x86-618             = linuxPackages-rt-x86-618.kernel;
+      ethercat-kmod-x86-618      = mkEthercatKmod linuxPackages-rt-x86-618 pkgs-x86;
+      ethercat-userspace-x86-618 = mkEthercatUserspace linuxPackages-rt-x86-618 pkgs-x86;
+
+      default = linuxPackages-rt-x86-618.kernel;
     };
 
-    # ─── Overlays ─────────────────────────────────────────────────────
-    # Usage in your flake.nix:
+    # ─── Overlay ──────────────────────────────────────────────────────
+    # Usage in your NixOS flake:
     #
     #   inputs.rt.url = "github:YOUR_ORG/ctrlnix-rt";
-    #
     #   nixpkgs.overlays = [ inputs.rt.overlays.default ];
     #
-    #   # aarch64 (RPi4):
-    #   boot.kernelPackages      = pkgs.linuxPackages-rt-rpi4;
-    #   boot.extraModulePackages = [ pkgs.ethercat-kmod-rpi4 ];
+    #   # aarch64 (RPi4, 6.12):
+    #   boot.kernelPackages      = pkgs.linuxPackages-rt-rpi4-612;
+    #   boot.extraModulePackages = [ pkgs.ethercat-kmod-rpi4-612 ];
     #
-    #   # x86_64:
-    #   boot.kernelPackages      = pkgs.linuxPackages-rt-x86;
-    #   boot.extraModulePackages = [ pkgs.ethercat-kmod-x86 ];
+    #   # x86_64 (6.12):
+    #   boot.kernelPackages      = pkgs.linuxPackages-rt-x86-612;
+    #   boot.extraModulePackages = [ pkgs.ethercat-kmod-x86-612 ];
+    #
+    #   # x86_64 (6.18):
+    #   boot.kernelPackages      = pkgs.linuxPackages-rt-x86-618;
+    #   boot.extraModulePackages = [ pkgs.ethercat-kmod-x86-618 ];
     #
     overlays.default = final: prev: {
-      linuxPackages-rt-rpi4   = linuxPackages-rt-rpi4;
-      ethercat-kmod-rpi4      = mkEthercatKmod linuxPackages-rt-rpi4 prev;
-      ethercat-userspace-rpi4 = mkEthercatUserspace linuxPackages-rt-rpi4 prev;
+      linuxPackages-rt-rpi4-612   = linuxPackages-rt-rpi4-612;
+      ethercat-kmod-rpi4-612      = mkEthercatKmod linuxPackages-rt-rpi4-612 prev;
+      ethercat-userspace-rpi4-612 = mkEthercatUserspace linuxPackages-rt-rpi4-612 prev;
 
-      linuxPackages-rt-x86    = linuxPackages-rt-x86;
-      ethercat-kmod-x86       = mkEthercatKmod linuxPackages-rt-x86 prev;
-      ethercat-userspace-x86  = mkEthercatUserspace linuxPackages-rt-x86 prev;
+      linuxPackages-rt-x86-612    = linuxPackages-rt-x86-612;
+      ethercat-kmod-x86-612       = mkEthercatKmod linuxPackages-rt-x86-612 prev;
+      ethercat-userspace-x86-612  = mkEthercatUserspace linuxPackages-rt-x86-612 prev;
+
+      linuxPackages-rt-x86-618    = linuxPackages-rt-x86-618;
+      ethercat-kmod-x86-618       = mkEthercatKmod linuxPackages-rt-x86-618 prev;
+      ethercat-userspace-x86-618  = mkEthercatUserspace linuxPackages-rt-x86-618 prev;
     };
   };
 }
