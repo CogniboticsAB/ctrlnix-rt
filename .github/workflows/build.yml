@@ -1,4 +1,4 @@
-name: Build RT Kernel and EtherCAT (aarch64 + x86_64)
+name: Build RT Kernels and EtherCAT (aarch64 + x86_64)
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -33,21 +33,21 @@ jobs:
           name: cognibotics
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Build RT kernel
+      - name: Build RPi4 6.12 RT kernel
         run: |
-          nix build .#packages.aarch64-linux.kernel \
+          nix build .#packages.aarch64-linux.kernel-rpi4-612 \
             --no-link --print-out-paths \
             | cachix push cognibotics
 
-      - name: Build EtherCAT kernel module
+      - name: Build RPi4 6.12 EtherCAT kernel module
         run: |
-          nix build .#packages.aarch64-linux.ethercat-kmod \
+          nix build .#packages.aarch64-linux.ethercat-kmod-rpi4-612 \
             --no-link --print-out-paths \
             | cachix push cognibotics
 
-      - name: Build EtherCAT userspace tools
+      - name: Build RPi4 6.12 EtherCAT userspace tools
         run: |
-          nix build .#packages.aarch64-linux.ethercat-userspace \
+          nix build .#packages.aarch64-linux.ethercat-userspace-rpi4-612 \
             --no-link --print-out-paths \
             | cachix push cognibotics
 
@@ -72,20 +72,38 @@ jobs:
           name: cognibotics
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Build RT kernel
+      - name: Build x86 6.12 RT kernel
         run: |
-          nix build .#packages.x86_64-linux.kernel \
+          nix build .#packages.x86_64-linux.kernel-x86-612 \
             --no-link --print-out-paths \
             | cachix push cognibotics
 
-      - name: Build EtherCAT kernel module
+      - name: Build x86 6.12 EtherCAT kernel module
         run: |
-          nix build .#packages.x86_64-linux.ethercat-kmod \
+          nix build .#packages.x86_64-linux.ethercat-kmod-x86-612 \
             --no-link --print-out-paths \
             | cachix push cognibotics
 
-      - name: Build EtherCAT userspace tools
+      - name: Build x86 6.12 EtherCAT userspace tools
         run: |
-          nix build .#packages.x86_64-linux.ethercat-userspace \
+          nix build .#packages.x86_64-linux.ethercat-userspace-x86-612 \
+            --no-link --print-out-paths \
+            | cachix push cognibotics
+
+      - name: Build x86 6.18 RT kernel
+        run: |
+          nix build .#packages.x86_64-linux.kernel-x86-618 \
+            --no-link --print-out-paths \
+            | cachix push cognibotics
+
+      - name: Build x86 6.18 EtherCAT kernel module
+        run: |
+          nix build .#packages.x86_64-linux.ethercat-kmod-x86-618 \
+            --no-link --print-out-paths \
+            | cachix push cognibotics
+
+      - name: Build x86 6.18 EtherCAT userspace tools
+        run: |
+          nix build .#packages.x86_64-linux.ethercat-userspace-x86-618 \
             --no-link --print-out-paths \
             | cachix push cognibotics
