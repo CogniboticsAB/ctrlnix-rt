@@ -167,6 +167,20 @@
       linuxPackages-rt-x86-618    = linuxPackages-rt-x86-618;
       ethercat-kmod-x86-618       = mkEthercatKmod linuxPackages-rt-x86-618 prev;
       ethercat-userspace-x86-618  = mkEthercatUserspace linuxPackages-rt-x86-618 prev;
+
+      # Generic aliases - used by ethercat.nix and jlt-packages.nix so they
+      # stay arch-agnostic. Points to the default kernel for each arch:
+      #   aarch64 -> rpi4-612 (only option)
+      #   x86_64  -> x86-618  (latest)
+      linuxPackages-rt   = if prev.system == "aarch64-linux"
+                           then linuxPackages-rt-rpi4-612
+                           else linuxPackages-rt-x86-618;
+      ethercat-kmod      = if prev.system == "aarch64-linux"
+                           then mkEthercatKmod linuxPackages-rt-rpi4-612 prev
+                           else mkEthercatKmod linuxPackages-rt-x86-618  prev;
+      ethercat-userspace = if prev.system == "aarch64-linux"
+                           then mkEthercatUserspace linuxPackages-rt-rpi4-612 prev
+                           else mkEthercatUserspace linuxPackages-rt-x86-618  prev;
     };
   };
 }
