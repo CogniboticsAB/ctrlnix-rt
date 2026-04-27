@@ -81,9 +81,9 @@ environment.systemPackages = [ pkgs.ethercat-userspace-x86-618 ];
 
 | Package | aarch64 resolves to | x86_64 resolves to |
 |---------|--------------------|--------------------|
-| `linuxPackages-rt` | `linuxPackages-rt-rpi4-612` | `linuxPackages-rt-x86-618` |
-| `ethercat-kmod` | `ethercat-kmod-rpi4-612` | `ethercat-kmod-x86-618` |
-| `ethercat-userspace` | `ethercat-userspace-rpi4-612` | `ethercat-userspace-x86-618` |
+| `linuxPackages-rt` | `linuxPackages-rt-rpi4-612` | `linuxPackages-rt-x86-612` |
+| `ethercat-kmod` | `ethercat-kmod-rpi4-612` | `ethercat-kmod-x86-612` |
+| `ethercat-userspace` | `ethercat-userspace-rpi4-612` | `ethercat-userspace-x86-612` |
 
 ### Named packages
 
@@ -95,9 +95,9 @@ environment.systemPackages = [ pkgs.ethercat-userspace-x86-618 ];
 | `linuxPackages-rt-x86-612` | x86_64 kernel 6.12 with `PREEMPT_RT` |
 | `ethercat-kmod-x86-612` | IgH EtherCAT master kernel module (x86, 6.12) |
 | `ethercat-userspace-x86-612` | IgH EtherCAT userspace tools (x86, 6.12) |
-| `linuxPackages-rt-x86-618` | x86_64 kernel 6.18 with `PREEMPT_RT` |
-| `ethercat-kmod-x86-618` | IgH EtherCAT master kernel module (x86, 6.18) |
-| `ethercat-userspace-x86-618` | IgH EtherCAT userspace tools (x86, 6.18) |
+| `linuxPackages-rt-x86-618` | x86_64 kernel 6.18 with `PREEMPT_RT` *(disabled — no IgH 6.18 bcmgenet support yet)* |
+| `ethercat-kmod-x86-618` | IgH EtherCAT master kernel module (x86, 6.18) *(disabled)* |
+| `ethercat-userspace-x86-618` | IgH EtherCAT userspace tools (x86, 6.18) *(disabled)* |
 
 ## Kernel configuration
 
@@ -118,11 +118,21 @@ so omitting it keeps the config compatible with both versions.
 IgH EtherCAT master 1.6.9 built against the RT kernel. Set your NIC MAC address in your
 host configuration:
 
+Supported drivers (select one per host):
+
+| Module | Flag | Hardware |
+|--------|------|----------|
+| `ec_bcmgenet` | `--enable-genet` | RPi4 onboard NIC (Broadcom GENET) |
+| `ec_ccat` | `--enable-ccat` | Beckhoff CCAT FPGA (CX IPC) |
+| `ec_igb` | `--enable-igb` | Intel I210 NIC (PCIe) |
+| `ec_generic` | `--enable-generic` | Fallback — any NIC via Linux network stack |
+
 ```nix
-boot.kernelModules = [ "ec_master" "ec_generic" ];
+boot.kernelModules = [ "ec_master" "ec_bcmgenet" ];  # example: RPi4
 boot.extraModprobeConfig = ''
   options ec_master main_devices=XX:XX:XX:XX:XX:XX
 '';
+networking.networkmanager.unmanaged = [ "mac:XX:XX:XX:XX:XX:XX" ];
 ```
 
 ## License
