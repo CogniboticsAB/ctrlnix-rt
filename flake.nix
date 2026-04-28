@@ -8,35 +8,29 @@
 
     # ─── Shared RT kernel config ──────────────────────────────────────
     # Applied to all three kernels. Notes:
-    # - PREEMPT_RT=yes implicitly disables PREEMPT and PREEMPT_VOLUNTARY;
-    #   setting PREEMPT=no explicitly causes PREEMPT_RT to fail on x86 6.12.
+    # - PREEMPT_VOLUNTARY is intentionally absent: valid in 6.12 but
+    #   removed in 6.18, so omitting it keeps the config compatible.
     # - DRM_I915_GVT / DRM_I915_GVT_KVMGT are absent from both 6.12
     #   and 6.18 kernels but present in the nixpkgs base config; mark
     #   them as unset to suppress build errors on both versions.
     # - NO_HZ_FULL / RCU_NOCB_CPU / RCU_EXPERT are enabled to allow true
     #   core isolation, making cores tickless and offloading RCU callbacks
     #   to prevent system stalls when an isolated core is at 100% utilization.
+    # - BCMGENET is forced to module (not built-in) so it can be blacklisted
+    #   on the RPi4, allowing ec_genet (IgH native driver) to claim the NIC.
+    #   Note: ec_genet declares a soft dep on mdio-bcm-unimac (built-in on
+    #   RPi4), so MDIO_BCM_UNIMAC does not need to be forced to module.
     rtKernelConfig = with lib.kernel; {
       PREEMPT_RT         = yes;
-
-      # 1000 Hz timer tick for 1ms scheduling resolution — essential for
-      # sub-millisecond EtherCAT cycle times. RPi4 base kernel defaults to
-      # HZ_250; x86 base kernel already defaults to HZ_1000.
-      # Use mkForce to override the RPi4 base config's HZ_250 selection.
-      # Do NOT force HZ_250=no — that triggers a PREEMPT_RT conflict on RPi4.
-      HZ_1000            = lib.mkForce yes;
-
-      # Build bcmgenet as a module (not built-in) so it can be blacklisted
-      # on the RPi4, allowing ec_genet (IgH native driver) to claim the NIC.
-      # Note: ec_genet declares a soft dep on mdio-bcm-unimac (built-in on
-      # RPi4), so MDIO_BCM_UNIMAC does not need to be forced to module.
-      BCMGENET           = lib.mkForce module;
+      PREEMPT            = lib.mkForce no;
       RCU_BOOST          = yes;
 
       # Enable true isolation support (tickless + RCU offloading)
       NO_HZ_FULL         = yes;
       RCU_NOCB_CPU       = yes;
       RCU_EXPERT         = yes;
+
+      BCMGENET           = lib.mkForce module;
 
       DRM_I915_GVT       = lib.mkForce (option no);
       DRM_I915_GVT_KVMGT = lib.mkForce (option no);
