@@ -8,8 +8,8 @@
 
     # ─── Shared RT kernel config ──────────────────────────────────────
     # Applied to all three kernels. Notes:
-    # - PREEMPT_VOLUNTARY is intentionally absent: valid in 6.12 but
-    #   removed in 6.18, so omitting it keeps the config compatible.
+    # - PREEMPT_RT=yes implicitly disables PREEMPT and PREEMPT_VOLUNTARY;
+    #   setting PREEMPT=no explicitly causes PREEMPT_RT to fail on x86 6.12.
     # - DRM_I915_GVT / DRM_I915_GVT_KVMGT are absent from both 6.12
     #   and 6.18 kernels but present in the nixpkgs base config; mark
     #   them as unset to suppress build errors on both versions.
@@ -18,13 +18,13 @@
     #   to prevent system stalls when an isolated core is at 100% utilization.
     rtKernelConfig = with lib.kernel; {
       PREEMPT_RT         = yes;
-      PREEMPT            = lib.mkForce no;
 
       # 1000 Hz timer tick for 1ms scheduling resolution — essential for
       # sub-millisecond EtherCAT cycle times. RPi4 base kernel defaults to
       # HZ_250; x86 base kernel already defaults to HZ_1000.
-      HZ_250             = lib.mkForce no;
-      HZ_1000            = yes;
+      # Use mkForce to override the RPi4 base config's HZ_250 selection.
+      # Do NOT force HZ_250=no — that triggers a PREEMPT_RT conflict on RPi4.
+      HZ_1000            = lib.mkForce yes;
 
       # Build bcmgenet as a module (not built-in) so it can be blacklisted
       # on the RPi4, allowing ec_genet (IgH native driver) to claim the NIC.
