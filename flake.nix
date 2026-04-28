@@ -6,8 +6,8 @@
   outputs = { self, nixpkgs }: let
     lib = nixpkgs.lib;
 
-    # ─── Shared RT kernel config ──────────────────────────────────────
-    # Applied to all three kernels. Notes:
+    # ─── Shared RT kernel config (applied to all kernels) ────────────
+    # Notes:
     # - PREEMPT_VOLUNTARY is intentionally absent: valid in 6.12 but
     #   removed in 6.18, so omitting it keeps the config compatible.
     # - DRM_I915_GVT / DRM_I915_GVT_KVMGT are absent from both 6.12
@@ -16,10 +16,6 @@
     # - NO_HZ_FULL / RCU_NOCB_CPU / RCU_EXPERT are enabled to allow true
     #   core isolation, making cores tickless and offloading RCU callbacks
     #   to prevent system stalls when an isolated core is at 100% utilization.
-    # - BCMGENET is forced to module (not built-in) so it can be blacklisted
-    #   on the RPi4, allowing ec_genet (IgH native driver) to claim the NIC.
-    #   Note: ec_genet declares a soft dep on mdio-bcm-unimac (built-in on
-    #   RPi4), so MDIO_BCM_UNIMAC does not need to be forced to module.
     rtKernelConfig = with lib.kernel; {
       PREEMPT_RT         = yes;
       PREEMPT            = lib.mkForce no;
@@ -30,11 +26,17 @@
       RCU_NOCB_CPU       = yes;
       RCU_EXPERT         = yes;
 
-      BCMGENET           = lib.mkForce module;
-
       DRM_I915_GVT       = lib.mkForce (option no);
       DRM_I915_GVT_KVMGT = lib.mkForce (option no);
     };
+
+    # ─── RPi4-specific kernel config ─────────────────────────────────
+    # BCMGENET must be a module (not built-in) so it can be blacklisted,
+    # allowing ec_genet (IgH native driver) to claim the NIC exclusively.
+    # This option does not exist on x86 — keep it out of rtKernelConfig.
+    rpi4KernelConfig = rtKernelConfig // (with lib.kernel; {
+      BCMGENET           = lib.mkForce module;
+    });
 
     # ─── EtherCAT IGH 1.6.9 source (shared by all builds) ────────────
     ethercatSrc = {
@@ -106,7 +108,7 @@
 
     linuxPackages-rt-rpi4-612 = pkgs-aarch64.linuxPackages_rpi4.extend (_: super: {
       kernel = super.kernel.override {
-        structuredExtraConfig = rtKernelConfig;
+        structuredExtraConfig = rpi4KernelConfig;
       };
     });
 
