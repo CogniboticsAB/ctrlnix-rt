@@ -21,8 +21,6 @@
       PREEMPT            = lib.mkForce no;
       RCU_BOOST          = yes;
 
-      HZ_1000            = lib.mkForce yes;
-
       # Enable true isolation support (tickless + RCU offloading)
       NO_HZ_FULL         = yes;
       RCU_NOCB_CPU       = yes;
@@ -38,6 +36,7 @@
     # This option does not exist on x86 — keep it out of rtKernelConfig.
     rpi4KernelConfig = rtKernelConfig // (with lib.kernel; {
       BCMGENET           = lib.mkForce module;
+      HZ_1000            = lib.mkForce yes;
     });
 
     # ─── EtherCAT IGH 1.6.9 source (shared by all builds) ────────────
